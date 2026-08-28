@@ -185,10 +185,42 @@ func BehindCount(cacheDir, synced, head string) int {
 // the updated meta (new Synced sha + new Tree signature) for the caller to
 // persist in the manifest. The resulting changes stay uncommitted in the hub
 // for the user to review and commit.
+//
+// Safety: the upstream tree is fully materialized into a staging directory
+// before the current one is replaced (rename swap with rollback), so a failure
+// mid-extract never leaves the skill half-written.
 func UpdateUpstreamSkill(hub, rel string, meta SkillMeta) (SkillMeta, error) {
-	if meta.Tree == "" || meta.Synced == "" {
+	if meta.Tree == "" {
 		return meta, ErrNoBaseline
 	}
+	skillDir := filepath.Join(hub, filepath.FromSlash(rel))
+	if meta.Synced == "" {
+		// Upstream recorded without a synced sha (e.g. added via `e`): establish
+		// the baseline by comparing content signatures. Equal → adopt the
+		// upstream head as baseline; different → treat as diverged local work.
+		cacheDir, err := EnsureBareClone(meta.Source)
+		if err != nil {
+			return meta, err
+		}
+		head, err := resolveUpstreamHead(cacheDir, meta.Ref)
+		if err != nil {
+			return meta, err
+		}
+		sig, err := signatureOfUpstreamTree(cacheDir, head, meta.Path)
+		if err != nil {
+			return meta, err
+		}
+		local, err := DirSignature(skillDir)
+		if err != nil {
+			return meta, err
+		}
+		if local != sig {
+			return meta, ErrDiverged
+		}
+		meta.Synced = head
+		return meta, nil
+	}
+
 	diverged, err := HasLocalChanges(hub, rel, meta)
 	if err != nil {
 		return meta, err
@@ -207,26 +239,60 @@ func UpdateUpstreamSkill(hub, rel string, meta SkillMeta) (SkillMeta, error) {
 	if head == meta.Synced {
 		return meta, nil // already up to date
 	}
-	skillDir := filepath.Join(hub, filepath.FromSlash(rel))
-	entries, err := os.ReadDir(skillDir)
+
+	// Materialize the replacement into staging first — nothing is touched
+	// inside the hub until the new tree is complete.
+	staging, err := os.MkdirTemp(hub, ".skillsend-stage-")
 	if err != nil {
 		return meta, err
 	}
-	for _, e := range entries {
-		if err := os.RemoveAll(filepath.Join(skillDir, e.Name())); err != nil {
-			return meta, err
-		}
-	}
-	if err := materialize(cacheDir, head, meta.Path, skillDir); err != nil {
+	stageSkill := filepath.Join(staging, "skill")
+	if err := os.MkdirAll(stageSkill, 0o755); err != nil {
+		os.RemoveAll(staging)
 		return meta, err
 	}
-	sig, err := DirSignature(skillDir)
+	if err := materialize(cacheDir, head, meta.Path, stageSkill); err != nil {
+		os.RemoveAll(staging)
+		return meta, err
+	}
+	sig, err := DirSignature(stageSkill)
 	if err != nil {
+		os.RemoveAll(staging)
+		return meta, err
+	}
+	defer os.RemoveAll(staging)
+
+	// Swap: current → backup, staged → current; roll back on any failure.
+	backup, err := os.MkdirTemp(hub, ".skillsend-back-")
+	if err != nil {
+		return meta, err
+	}
+	defer os.RemoveAll(backup)
+	backupSkill := filepath.Join(backup, "skill")
+	if err := os.Rename(skillDir, backupSkill); err != nil {
+		return meta, err
+	}
+	if err := os.Rename(stageSkill, skillDir); err != nil {
+		os.Rename(backupSkill, skillDir) // roll back
 		return meta, err
 	}
 	meta.Synced = head
 	meta.Tree = sig
 	return meta, nil
+}
+
+// signatureOfUpstreamTree materializes an upstream tree into a temp dir and
+// returns its content signature.
+func signatureOfUpstreamTree(cacheDir, head, sub string) (string, error) {
+	tmp, err := os.MkdirTemp("", "skillsend-sig-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	if err := materialize(cacheDir, head, sub, tmp); err != nil {
+		return "", err
+	}
+	return DirSignature(tmp)
 }
 
 // materialize extracts a commit's tree (optionally limited to a subdirectory,
@@ -346,7 +412,7 @@ func CheckStaleness(hub string, m *Manifest) []Staleness {
 	for _, name := range names {
 		meta := m.Skills[name]
 		st := Staleness{Name: name}
-		skill, ok := findSkillRel(hub, name)
+		skill, ok := FindSkillRel(hub, name)
 		if !ok {
 			st.Err = fmtErr("skill %q not found in hub", name)
 			out = append(out, st)
@@ -376,13 +442,16 @@ func CheckStaleness(hub string, m *Manifest) []Staleness {
 	return out
 }
 
-// FindSkillRel locates a skill's hub-relative path by leaf name (top or nested one level).
-func FindSkillRel(hub, leaf string) (string, bool) {
-	return findSkillRel(hub, leaf)
+// ShortSha abbreviates a commit sha for display.
+func ShortSha(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
-// findSkillRel locates a skill's hub-relative path by leaf name (top or nested one level).
-func findSkillRel(hub, leaf string) (string, bool) {
+// FindSkillRel locates a skill's hub-relative path by leaf name (top or nested one level).
+func FindSkillRel(hub, leaf string) (string, bool) {
 	direct := filepath.Join(hub, leaf)
 	if fi, err := os.Stat(filepath.Join(direct, "SKILL.md")); err == nil && !fi.IsDir() {
 		return leaf, true

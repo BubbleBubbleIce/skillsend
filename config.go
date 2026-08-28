@@ -26,12 +26,14 @@ func DefaultTargets() []string {
 	}
 }
 
+// configPath is ~/.config/skillsend/config.toml — the Unix convention the
+// spec pins, regardless of the platform's UserConfigDir.
 func configPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "skillsend", "config.toml"), nil
+	return filepath.Join(home, ".config", "skillsend", "config.toml"), nil
 }
 
 // LoadConfig reads the config; found=false means first run.

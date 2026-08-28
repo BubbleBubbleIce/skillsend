@@ -155,12 +155,11 @@ func (m *Model) renderTargetList(width int) string {
 		if i == m.tcursor {
 			cursor = selectedStyle.Render("❯ ")
 		}
-		glyph, styled := glyphFor(fe.entry.Kind)
+		glyph := glyphFor(fe.entry.Kind)
 		name := fmt.Sprintf("%s%s %-28s", cursor, glyph, truncate(fe.entry.Name, 28))
 		if fe.entry.Conflicts {
 			name += " " + conflictStyle.Render("⚠ conflict")
 		}
-		_ = styled
 		b.WriteString(name + "\n")
 	}
 	if len(entries) == 0 {
@@ -169,18 +168,18 @@ func (m *Model) renderTargetList(width int) string {
 	return focusRingStyle.Render(b.String())
 }
 
-func glyphFor(k core.EntryKind) (string, interface{}) {
+func glyphFor(k core.EntryKind) string {
 	switch k {
 	case core.KindHubLink:
-		return onStyle.Render("●"), nil
+		return onStyle.Render("●")
 	case core.KindForeignLink:
-		return foreignStyle.Render("◌"), nil
+		return foreignStyle.Render("◌")
 	case core.KindBroken:
-		return brokenStyle.Render("✕"), nil
+		return brokenStyle.Render("✕")
 	case core.KindForeignDir:
-		return foreignStyle.Render("▣"), nil
+		return foreignStyle.Render("▣")
 	}
-	return "?", nil
+	return "?"
 }
 
 func (m *Model) renderTargetDetail(width int) string {

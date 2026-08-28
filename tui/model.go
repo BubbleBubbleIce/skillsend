@@ -101,9 +101,6 @@ func New(state *core.State, targets []string) Model {
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd { return nil }
 
-// Hub implements the state accessor used by setup flow and main.
-func (m Model) State() *core.State { return m.state }
-
 func refreshCmd(hub string, targets []string) tea.Cmd {
 	return func() tea.Msg {
 		st, err := core.Scan(hub, targets)
@@ -201,7 +198,8 @@ func (m *Model) filtered() []core.Skill {
 	needle := strings.ToLower(m.filterText)
 	var out []core.Skill
 	for _, s := range skills {
-		if strings.Contains(strings.ToLower(s.Name), needle) ||
+		if strings.Contains(strings.ToLower(s.Label), needle) ||
+			strings.Contains(strings.ToLower(s.Name), needle) ||
 			strings.Contains(strings.ToLower(s.Description), needle) {
 			out = append(out, s)
 		}

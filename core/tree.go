@@ -15,6 +15,9 @@ import (
 // committed or not — alters the signature, so comparing it against the
 // manifest's recorded value detects local divergence from the synced snapshot
 // without needing the upstream's git objects locally.
+//
+// Noise that does not represent user intent is excluded: .git directories and
+// .DS_Store files are skipped.
 func DirSignature(root string) (string, error) {
 	h := sha256.New()
 	var files []string
@@ -22,7 +25,13 @@ func DirSignature(root string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() {
+		if info.IsDir() {
+			if info.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !info.Mode().IsRegular() || info.Name() == ".DS_Store" {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)

@@ -68,6 +68,7 @@ func (u Upstream) Empty() bool { return u.Source == "" }
 type Skill struct {
 	Name        string // leaf directory name; also the symlink name in targets
 	Rel         string // hub-root-relative path, e.g. "ericadskill/draft-interview-intro-answers"
+	Label       string // display name: frontmatter name when set, else Name
 	Description string // from SKILL.md frontmatter
 	Upstream    Upstream
 	Dirty       []string        // uncommitted hub files under this skill (rel to hub root)
@@ -93,10 +94,13 @@ func (s *State) SkillByName(name string) (Skill, bool) {
 	return Skill{}, false
 }
 
-// hubSkillMatches reports whether resolved points inside the hub at the given skill rel path.
-func hubSkillMatches(hub, rel, resolved string) bool {
-	want := filepath.Join(hub, filepath.FromSlash(rel))
-	return resolved == want
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // resolveLink follows a symlink to its final target. Returns the resolved path and

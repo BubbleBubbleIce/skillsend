@@ -45,9 +45,9 @@ func (m Model) View() string {
 
 	b.WriteString("\n")
 	if m.errMsg != "" {
-		b.WriteString(errStyle.Render("✗ " + clip(m.errMsg, maxInt(w-4, 10))))
+		b.WriteString(errStyle.Render("✗ " + truncate(m.errMsg, maxInt(w-4, 10))))
 	} else {
-		b.WriteString(statusStyle.Render("● " + clip(m.status, maxInt(w-4, 10))))
+		b.WriteString(statusStyle.Render("● " + truncate(m.status, maxInt(w-4, 10))))
 	}
 	b.WriteString("\n" + footerStyle.Render("? help · q quit"))
 
@@ -69,14 +69,7 @@ func clipLines(block string, n int) string {
 		lines = lines[:n]
 	}
 	for i, l := range lines {
-		lines[i] = clip(l, 240)
+		lines[i] = truncate(l, 240)
 	}
 	return strings.Join(lines, "\n")
-}
-
-func clip(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:maxInt(n-1, 1)] + "…"
 }

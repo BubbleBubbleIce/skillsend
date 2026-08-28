@@ -89,8 +89,18 @@ func (m Model) viewSkills() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, "  ", detail)
 }
 
+// stalenessByName indexes the last staleness check by skill name.
+func (m *Model) stalenessByName() map[string]core.Staleness {
+	out := map[string]core.Staleness{}
+	for _, st := range m.staleness {
+		out[st.Name] = st
+	}
+	return out
+}
+
 func (m *Model) renderSkillList(width int) string {
 	skills := m.filtered()
+	stale := m.stalenessByName()
 	var b strings.Builder
 	b.WriteString(colHeaderStyle.Render("SKILL") + strings.Repeat(" ", 4))
 	for i, t := range m.targets {
@@ -105,11 +115,10 @@ func (m *Model) renderSkillList(width int) string {
 
 	for i, sk := range skills {
 		cursor := "  "
-		style := lipgloss.NewStyle()
 		if i == m.cursor {
 			cursor = selectedStyle.Render("❯ ")
 		}
-		line := fmt.Sprintf("%s%-24s", cursor, truncate(sk.Name, 24))
+		line := fmt.Sprintf("%s%-24s", cursor, truncate(sk.Label, 24))
 		for _, t := range m.targets {
 			if sk.Enabled[t] {
 				line += onStyle.Render("●") + "  "
@@ -120,10 +129,12 @@ func (m *Model) renderSkillList(width int) string {
 		if len(sk.Dirty) > 0 {
 			line += dirtyStyle.Render("⚠")
 		}
-		if sk.Upstream.Source != "" {
-			line += " " + behindStyle.Render("↑")
+		if st, ok := stale[sk.Name]; ok && !st.Diverged && st.Behind > 0 {
+			line += " " + behindStyle.Render(fmt.Sprintf("↑%d", st.Behind))
+		} else if sk.Upstream.Source != "" {
+			line += " " + colHeaderStyle.Render("↑")
 		}
-		b.WriteString(style.Render(line) + "\n")
+		b.WriteString(line + "\n")
 	}
 	if m.filtering {
 		b.WriteString("\n" + m.filter.View() + "\n")
@@ -143,15 +154,32 @@ func (m *Model) renderSkillDetail(width int) string {
 	kv := func(k, v string) {
 		b.WriteString(detailKeyStyle.Render(fmt.Sprintf("%-12s", k)) + v + "\n")
 	}
-	b.WriteString(selectedStyle.Render(sk.Name) + "\n\n")
+	b.WriteString(selectedStyle.Render(sk.Label) + "\n\n")
 	kv("path", sk.Rel)
+	if sk.Label != sk.Name {
+		kv("dir", sk.Name)
+	}
 	if sk.Description != "" {
 		kv("desc", truncate(sk.Description, maxInt(width-14, 20)))
 	}
 	if sk.Upstream.Source != "" {
 		kv("upstream", sk.Upstream.Source)
 		if sk.Upstream.Synced != "" {
-			kv("synced", head7T(sk.Upstream.Synced))
+			kv("synced", core.ShortSha(sk.Upstream.Synced))
+		}
+		if st, ok := m.stalenessByName()[sk.Name]; ok {
+			switch {
+			case st.Err != nil:
+				kv("staleness", errStyle.Render("check failed"))
+			case st.Diverged:
+				kv("staleness", conflictStyle.Render("local changes — u will skip"))
+			case st.UpToDate:
+				kv("staleness", statusStyle.Render("up to date"))
+			default:
+				kv("staleness", behindStyle.Render(fmt.Sprintf("behind %d — press u", st.Behind)))
+			}
+		} else {
+			kv("staleness", footerStyle.Render("press f in Hub view"))
 		}
 	} else {
 		kv("upstream", "— (own skill)")
@@ -159,6 +187,15 @@ func (m *Model) renderSkillDetail(width int) string {
 	if len(sk.Dirty) > 0 {
 		kv("dirty", dirtyStyle.Render(fmt.Sprintf("%d file(s) uncommitted", len(sk.Dirty))))
 	}
+
+	// SKILL.md body preview
+	if body := m.previewBody(sk, 12); body != "" {
+		b.WriteString("\n" + colHeaderStyle.Render("SKILL.md") + "\n")
+		for _, l := range strings.Split(body, "\n") {
+			b.WriteString("  " + footerStyle.Render(truncate(l, maxInt(width-6, 20))) + "\n")
+		}
+	}
+
 	b.WriteString("\n")
 	for i, t := range m.targets {
 		state := offStyle.Render("○ disabled")
@@ -179,6 +216,19 @@ func (m *Model) renderSkillDetail(width int) string {
 	return b.String()
 }
 
+// previewBody returns the first n lines of the skill's SKILL.md body.
+func (m *Model) previewBody(sk core.Skill, n int) string {
+	_, _, body := core.ReadSkillMD(filepath.Join(m.hub, filepath.FromSlash(sk.Rel)))
+	if body == "" {
+		return ""
+	}
+	lines := strings.Split(body, "\n")
+	if len(lines) > n {
+		lines = append(lines[:n], "…")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -194,11 +244,4 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func head7T(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }

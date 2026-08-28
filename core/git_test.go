@@ -197,6 +197,47 @@ func TestUpdateUpstreamSkillNoBaseline(t *testing.T) {
 	}
 }
 
+func TestUpdateUpstreamSkillEstablishesBaseline(t *testing.T) {
+	base := t.TempDir()
+	up2 := filepath.Join(base, "up2")
+	hub := filepath.Join(base, "hub")
+	initRepo(t, up2)
+	commitFile(t, up2, "grilling/SKILL.md", "---\nname: grilling\n---\nv1", "a")
+
+	initRepo(t, hub)
+	writeFile(t, filepath.Join(hub, "grilling/SKILL.md"), "---\nname: grilling\n---\nv1")
+	gitCmd(t, hub, "add", "-A")
+	gitCmd(t, hub, "commit", "-m", "same content")
+	CacheRootOverride = filepath.Join(base, "cache")
+	t.Cleanup(func() { CacheRootOverride = "" })
+
+	// `e`-style upstream record: Tree known, Synced unknown
+	sig, err := DirSignature(filepath.Join(hub, "grilling"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta, err := UpdateUpstreamSkill(hub, "grilling", SkillMeta{Source: up2, Path: "grilling", Tree: sig})
+	if err != nil {
+		t.Fatalf("baseline establishment failed: %v", err)
+	}
+	if meta.Synced == "" {
+		t.Fatal("expected synced sha to be established")
+	}
+
+	// matching content means up-to-date afterwards
+	again, err := UpdateUpstreamSkill(hub, "grilling", meta)
+	if err != nil || again.Synced != meta.Synced {
+		t.Fatalf("post-baseline update: %+v %v", again, err)
+	}
+
+	// differing content is refused and baseline stays unknown
+	writeFile(t, filepath.Join(hub, "grilling", "SKILL.md"), "---\nname: grilling\n---\nLOCAL EDIT")
+	_, err = UpdateUpstreamSkill(hub, "grilling", SkillMeta{Source: up2, Path: "grilling", Tree: sig})
+	if !errors.Is(err, ErrDiverged) {
+		t.Fatalf("want ErrDiverged, got %v", err)
+	}
+}
+
 func TestCheckStaleness(t *testing.T) {
 	upstream, hub, m := fixture(t)
 	sts := CheckStaleness(hub, m)

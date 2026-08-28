@@ -34,7 +34,7 @@ func Adopt(srcPath, hub string, m *Manifest) (SkillMeta, error) {
 	}
 
 	// Capture provenance before moving: origin repo + the skill's path inside it.
-	srcRoot, meta, err := upstreamProvenance(src)
+	_, meta, err := upstreamProvenance(src)
 	if err != nil {
 		return SkillMeta{}, err
 	}
@@ -52,6 +52,12 @@ func Adopt(srcPath, hub string, m *Manifest) (SkillMeta, error) {
 		}
 	}
 
+	// Strip any nested .git: provenance is already captured, and a nested repo
+	// would make the hub track a gitlink instead of versioning the content.
+	if err := os.RemoveAll(filepath.Join(dest, ".git")); err != nil {
+		return meta, err
+	}
+
 	if meta.Source != "" {
 		sig, err := DirSignature(dest)
 		if err != nil {
@@ -63,9 +69,18 @@ func Adopt(srcPath, hub string, m *Manifest) (SkillMeta, error) {
 			return meta, err
 		}
 	}
-	_ = srcRoot
 
 	if err := os.Symlink(dest, src); err != nil {
+		// Roll back: restore the original directory (same volume first, copy
+		// across devices as fallback) and undo the manifest entry.
+		if rbErr := os.Rename(dest, src); rbErr != nil {
+			if cpErr := copyTree(dest, src); cpErr != nil {
+				return meta, fmtErr("symlink failed (%v) and rollback failed (%v)", err, cpErr)
+			}
+			os.RemoveAll(dest)
+		}
+		m.Remove(leaf)
+		_ = m.Save(hub)
 		return meta, err
 	}
 	return meta, nil

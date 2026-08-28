@@ -38,7 +38,9 @@ func Scan(hubPath string, targetPaths []string) (*State, error) {
 	}
 
 	for _, sk := range scanHubSkills(hub) {
-		sk.Description = readDescription(filepath.Join(hub, filepath.FromSlash(sk.Rel)))
+		fmName, desc := readSkillMeta(filepath.Join(hub, filepath.FromSlash(sk.Rel)))
+		sk.Label = firstNonEmpty(fmName, sk.Name)
+		sk.Description = desc
 		if meta, ok := m.Get(sk.Name); ok {
 			sk.Upstream = Upstream{Source: meta.Source, Ref: meta.Ref, Synced: meta.Synced}
 		}
