@@ -106,9 +106,9 @@ func (m *Model) renderSkillList(width int) string {
 	for i, t := range m.targets {
 		name := filepath.Base(filepath.Dir(t))
 		if m.focusTarget == i {
-			b.WriteString(selectedStyle.Render("[" + name + "]") + " ")
+			b.WriteString(selectedStyle.Render("["+name+"]") + " ")
 		} else {
-			b.WriteString(colHeaderStyle.Render(" " + name + " ") + " ")
+			b.WriteString(colHeaderStyle.Render(" "+name+" ") + " ")
 		}
 	}
 	b.WriteString("\n")

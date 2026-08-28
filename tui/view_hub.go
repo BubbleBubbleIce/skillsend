@@ -89,7 +89,7 @@ func (m Model) viewHub() string {
 			line := "  " + st.Name + ": "
 			switch {
 			case st.Err != nil:
-				line += errStyle.Render("error: "+st.Err.Error())
+				line += errStyle.Render("error: " + st.Err.Error())
 			case st.Diverged && !st.UpToDate:
 				line += conflictStyle.Render(fmt.Sprintf("behind %d, local changes — update will skip", st.Behind))
 			case st.UpToDate:
