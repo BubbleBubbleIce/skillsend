@@ -4,7 +4,7 @@
 
 ## 背景
 
-用户机器上 skill 实体分裂在两处：自己的 skills 在 `~/my_dev/skills`（git 仓库，远端 `rookie-oops/skills`）；Matt Pocock 的 ~15 个 skills 是真实目录直接住在 `~/.agents/skills`，不在任何版本控制下，上游更新无法跟进。用户选择 A 档（完整方案），并新增要求：**hub 路径可自定义**——换新电脑时可以新建文件夹作为真源。
+用户机器上 skill 实体分裂在两处：自己的 skills 在 `~/my_dev/skills`（git 仓库，远端 `BubbleBubbleIce/skills`）；Matt Pocock 的 ~15 个 skills 是真实目录直接住在 `~/.agents/skills`，不在任何版本控制下，上游更新无法跟进。用户选择 A 档（完整方案），并新增要求：**hub 路径可自定义**——换新电脑时可以新建文件夹作为真源。
 
 ## 决策
 

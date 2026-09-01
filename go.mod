@@ -1,4 +1,4 @@
-module github.com/rookie-oops/skillsend
+module github.com/BubbleBubbleIce/skillsend
 
 go 1.26.4
 

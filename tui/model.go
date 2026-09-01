@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/BubbleBubbleIce/skillsend/core"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/rookie-oops/skillsend/core"
 )
 
 // tab indices

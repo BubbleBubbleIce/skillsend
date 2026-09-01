@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/BubbleBubbleIce/skillsend/core"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rookie-oops/skillsend/core"
 )
 
 func (m Model) updateHub(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

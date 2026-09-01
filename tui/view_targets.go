@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BubbleBubbleIce/skillsend/core"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rookie-oops/skillsend/core"
 )
 
 // flatEntry is one row of the targets view: a target directory entry with its
