@@ -14,7 +14,7 @@ TUI 采用三个视图（tab 切换），共享同一 core 状态模型：
 
 1. **Skills**：hub 内全部 skill 列表 + 详情栏（SKILL.md 预览、upstream、链接状态、脏状态）；space 按 target 开关；`/` 过滤搜索；`o` 用编辑器打开 skill；`e` 编辑 upstream 元数据；`u` 更新。
 2. **Targets**：反向视图——列出每个 target 目录中的全部条目并标注类型（hub 直链 / 外部链接 / 外部实体目录 / 断链）；`space` 开关 hub 链接，`a` 收编外部实体目录，`x` 删除链接（外部链接与断链需逐个确认；**只删链接，永不删实体目录**）。
-3. **Hub**：未提交文件列表；`u` pull、`p` push、`c` 全量暂存并提交（输入 message）；`f` 过时检查——对有 upstream 的 skill 逐个 fetch 并显示 ahead/behind，让用户更新前先知道会变什么。
+3. **Hub**：未提交文件列表；`u` pull、`p` push、`c` 全量暂存并提交（输入 message）；`f` 过时检查——对有 upstream 的 skill 逐个 fetch 并显示 ahead/behind；ADR-0006 又新增 `g` Clone 导入。
 
 所有网络操作（pull/push/fetch）异步执行、失败内联提示，绝不阻塞或崩溃 TUI——离线时面板依旧可用（切换、收编、浏览均不需要网络）。
 

@@ -55,6 +55,8 @@ type Model struct {
 	staleness    []core.Staleness
 	commitInput  textinput.Model
 	commitActive bool
+	cloneInput   textinput.Model
+	cloneActive  bool
 
 	// upstream edit modal
 	upstreamInput  textinput.Model
@@ -83,6 +85,9 @@ func New(state *core.State, targets []string) Model {
 	ci := textinput.New()
 	ci.Placeholder = "commit message"
 	ci.Prompt = "✓ "
+	gi := textinput.New()
+	gi.Placeholder = "https://github.com/user/skills.git"
+	gi.Prompt = "git clone "
 	ui := textinput.New()
 	ui.Placeholder = "https://github.com/user/skills.git  (empty to clear)"
 	ui.Prompt = "↑ "
@@ -92,6 +97,7 @@ func New(state *core.State, targets []string) Model {
 		state:         state,
 		filter:        fi,
 		commitInput:   ci,
+		cloneInput:    gi,
 		upstreamInput: ui,
 		status:        "ready",
 	}
@@ -143,6 +149,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.commitActive {
 			return m.updateCommitInput(msg)
+		}
+		if m.cloneActive {
+			return m.updateCloneInput(msg)
 		}
 		if m.upstreamActive {
 			return m.updateUpstreamInput(msg)

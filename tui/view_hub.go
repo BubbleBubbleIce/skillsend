@@ -37,6 +37,11 @@ func (m Model) updateHub(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.commitInput.SetValue("")
 		m.commitInput.Focus()
 		return m, textinput.Blink
+	case "g":
+		m.cloneActive = true
+		m.cloneInput.SetValue("")
+		m.cloneInput.Focus()
+		return m, textinput.Blink
 	case "f":
 		hub, targets := m.hub, m.targets
 		m.busy = true
@@ -53,6 +58,40 @@ func (m Model) updateHub(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func (m Model) updateCloneInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.cloneActive = false
+		m.cloneInput.Blur()
+		return m, nil
+	case "enter":
+		source := strings.TrimSpace(m.cloneInput.Value())
+		m.cloneActive = false
+		m.cloneInput.Blur()
+		if source == "" {
+			m.status = "clone cancelled (empty URL)"
+			return m, nil
+		}
+		hub, targets := m.hub, m.targets
+		m.busy = true
+		return m, func() tea.Msg {
+			names, err := core.CloneIntoHub(hub, source)
+			if err != nil {
+				return opResultMsg{err: err}
+			}
+			st, serr := core.Scan(hub, targets)
+			return opResultMsg{
+				status: "cloned: " + strings.Join(names, ", "),
+				err:    serr,
+				state:  st,
+			}
+		}
+	}
+	var cmd tea.Cmd
+	m.cloneInput, cmd = m.cloneInput.Update(msg)
+	return m, cmd
 }
 
 func firstErr(errs ...error) error {
@@ -104,9 +143,12 @@ func (m Model) viewHub() string {
 		}
 	}
 
-	b.WriteString("\n" + footerStyle.Render("u: pull · p: push · c: commit all (message) · f: staleness check"))
+	b.WriteString("\n" + footerStyle.Render("u: pull · p: push · c: commit all · f: staleness · g: clone GitHub repo"))
 	if m.commitActive {
 		b.WriteString("\n\n" + m.commitInput.View() + "\n")
+	}
+	if m.cloneActive {
+		b.WriteString("\n\n" + m.cloneInput.View() + "\n")
 	}
 	return lipgloss.NewStyle().PaddingLeft(1).Render(b.String())
 }
