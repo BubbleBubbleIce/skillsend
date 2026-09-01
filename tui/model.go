@@ -69,6 +69,7 @@ type Model struct {
 	status string
 	errMsg string
 	busy   bool
+	help   bool
 }
 
 type confirmRequest struct {
@@ -105,6 +106,17 @@ func New(state *core.State, targets []string) Model {
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd { return nil }
+
+// themedInputs paints the text inputs with the active palette. They
+// live on the model, so a runtime flavor switch is picked up here — on the
+// value copy View is about to render — rather than at construction time.
+func (m Model) themedInputs() Model {
+	themeInput(&m.filter)
+	themeInput(&m.commitInput)
+	themeInput(&m.cloneInput)
+	themeInput(&m.upstreamInput)
+	return m
+}
 
 func refreshCmd(hub string, targets []string) tea.Cmd {
 	return func() tea.Msg {
@@ -144,6 +156,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.help {
+			m.help = false
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		if m.confirm != nil {
 			return m.updateConfirm(msg)
 		}
@@ -169,7 +188,7 @@ func (m Model) updateGlobal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "q":
 		return m, tea.Quit
 	case "?":
-		m.status = "1/2/3 or tab: switch views · j/k move · space toggle · / filter (skills) · o open editor · u update · a adopt · x remove link (targets) · c commit · p push · f staleness (hub) · r rescan · q quit"
+		m.help = true
 		return m, nil
 	case "1":
 		m.tab = tabSkills
@@ -182,6 +201,9 @@ func (m Model) updateGlobal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.busy = true
 		return m, refreshCmd(m.hub, m.targets)
+	case "t":
+		m.status = "catppuccin: " + CycleFlavor()
+		return m, nil
 	}
 
 	switch m.tab {

@@ -100,19 +100,30 @@ func (m *Model) stalenessByName() map[string]core.Staleness {
 
 func (m *Model) renderSkillList(width int) string {
 	skills := m.filtered()
+	if len(skills) > 0 {
+		if m.cursor >= len(skills) {
+			m.cursor = len(skills) - 1
+		}
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+	}
 	stale := m.stalenessByName()
-	var b strings.Builder
-	b.WriteString(colHeaderStyle.Render("SKILL") + strings.Repeat(" ", 4))
+
+	// fixed header: "SKILL" + one column per target
+	var head strings.Builder
+	head.WriteString(colHeaderStyle.Render("SKILL") + strings.Repeat(" ", 4))
 	for i, t := range m.targets {
 		name := filepath.Base(filepath.Dir(t))
 		if m.focusTarget == i {
-			b.WriteString(selectedStyle.Render("["+name+"]") + " ")
+			head.WriteString(selectedStyle.Render("["+name+"]") + " ")
 		} else {
-			b.WriteString(colHeaderStyle.Render(" "+name+" ") + " ")
+			head.WriteString(colHeaderStyle.Render(" "+name+" ") + " ")
 		}
 	}
-	b.WriteString("\n")
 
+	// one line per skill
+	var lines []string
 	for i, sk := range skills {
 		cursor := "  "
 		if i == m.cursor {
@@ -134,7 +145,28 @@ func (m *Model) renderSkillList(width int) string {
 		} else if sk.Upstream.Source != "" {
 			line += " " + colHeaderStyle.Render("↑")
 		}
-		b.WriteString(line + "\n")
+		lines = append(lines, line)
+	}
+
+	// Body is clipped to h-6; the header is fixed, the rest scrolls with the
+	// cursor pinned to the bottom edge of the viewport.
+	scrollH := m.height - 7
+	if scrollH < 1 {
+		scrollH = 1
+	}
+	start := 0
+	if len(skills) > 0 && m.cursor >= scrollH {
+		start = m.cursor - scrollH + 1
+	}
+	end := start + scrollH
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	var b strings.Builder
+	b.WriteString(head.String() + "\n")
+	for _, l := range lines[start:end] {
+		b.WriteString(l + "\n")
 	}
 	if m.filtering {
 		b.WriteString("\n" + m.filter.View() + "\n")
@@ -230,13 +262,14 @@ func (m *Model) previewBody(sk core.Skill, n int) string {
 }
 
 func truncate(s string, n int) string {
-	if len(s) <= n {
+	r := []rune(s)
+	if len(r) <= n {
 		return s
 	}
 	if n <= 1 {
 		return "…"
 	}
-	return s[:n-1] + "…"
+	return string(r[:n-1]) + "…"
 }
 
 func maxInt(a, b int) int {

@@ -142,13 +142,30 @@ func (m Model) viewTargets() string {
 
 func (m *Model) renderTargetList(width int) string {
 	entries := m.flatEntries()
-	var b strings.Builder
-	b.WriteString(colHeaderStyle.Render("TARGET ENTRIES") + "\n")
+	if len(entries) == 0 {
+		return focusRingStyle.Render(colHeaderStyle.Render("TARGET ENTRIES") + "\n" + footerStyle.Render("(empty)") + "\n")
+	}
+	if m.tcursor >= len(entries) {
+		m.tcursor = len(entries) - 1
+	}
+	if m.tcursor < 0 {
+		m.tcursor = 0
+	}
+
+	// Build the full list as lines, recording which line each entry lands on
+	// so the viewport can keep the cursor visible.
+	var lines []string
+	entryLine := make([]int, len(entries))
+	for i := range entryLine {
+		entryLine[i] = -1
+	}
 	lastTarget := ""
 	for i, fe := range entries {
-		targetName := filepath.Base(filepath.Dir(fe.target))
 		if fe.target != lastTarget {
-			b.WriteString("\n" + colHeaderStyle.Render("── "+targetName+" "+footerStyle.Render("("+filepath.Base(fe.target)+")")) + "\n")
+			targetName := filepath.Base(filepath.Dir(fe.target))
+			lines = append(lines,
+				"",
+				colHeaderStyle.Render("── "+targetName+" "+footerStyle.Render("("+filepath.Base(fe.target)+")")))
 			lastTarget = fe.target
 		}
 		cursor := "  "
@@ -160,10 +177,29 @@ func (m *Model) renderTargetList(width int) string {
 		if fe.entry.Conflicts {
 			name += " " + conflictStyle.Render("⚠ conflict")
 		}
-		b.WriteString(name + "\n")
+		entryLine[i] = len(lines)
+		lines = append(lines, name)
 	}
-	if len(entries) == 0 {
-		b.WriteString(footerStyle.Render("(empty)") + "\n")
+
+	// The "TARGET ENTRIES" header is fixed; the remaining lines scroll. The
+	// body gets clipped to h-6 by View, so the list column must fit within it.
+	scrollH := m.height - 7
+	if scrollH < 1 {
+		scrollH = 1
+	}
+	start := 0
+	if cur := entryLine[m.tcursor]; cur >= scrollH {
+		start = cur - scrollH + 1
+	}
+	end := start + scrollH
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	var b strings.Builder
+	b.WriteString(colHeaderStyle.Render("TARGET ENTRIES") + "\n")
+	for _, l := range lines[start:end] {
+		b.WriteString(l + "\n")
 	}
 	return focusRingStyle.Render(b.String())
 }

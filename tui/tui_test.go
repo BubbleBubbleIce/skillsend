@@ -1,13 +1,15 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
+	"github.com/BubbleBubbleIce/skillsend/core"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/rookie-oops/skillsend/core"
 )
 
 func tuiEnv(t *testing.T) (hub string, targets []string, m Model) {
@@ -59,7 +61,7 @@ func apply(t *testing.T, m Model, msg tea.Msg) Model {
 }
 
 func TestViewRendersAllTabs(t *testing.T) {
-	hub, targets, m := tuiEnv(t)
+	_, _, m := tuiEnv(t)
 
 	v := m.View()
 	for _, want := range []string{"SKILLSEND", "Skills", "Targets", "Hub", "grilling", "tdd", "Stress-test plans."} {
@@ -67,8 +69,6 @@ func TestViewRendersAllTabs(t *testing.T) {
 			t.Errorf("skills view missing %q", want)
 		}
 	}
-	_ = hub
-	_ = targets
 }
 
 func TestTabSwitchAndViews(t *testing.T) {
@@ -88,7 +88,7 @@ func TestTabSwitchAndViews(t *testing.T) {
 }
 
 func TestToggleThroughUpdateCreatesLink(t *testing.T) {
-	hub, targets, m := tuiEnv(t)
+	_, targets, m := tuiEnv(t)
 	agents, claude := targets[0], targets[1]
 
 	// cursor on first skill (grilling), focus first target (agents): space → enable
@@ -137,7 +137,70 @@ func TestToggleThroughUpdateCreatesLink(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(agents, "grilling")); err != nil {
 		t.Fatal("agents link must remain")
 	}
-	_ = hub
+}
+
+func TestTargetsListScrollsToCursor(t *testing.T) {
+	_, targets, m := tuiEnv(t)
+	agents := targets[0]
+	// 40 foreign dirs so the target list overflows the terminal height.
+	for i := 0; i < 40; i++ {
+		name := fmt.Sprintf("s%02d", i)
+		if err := os.MkdirAll(filepath.Join(agents, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := core.Scan(m.hub, targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(st, targets)
+	m.width, m.height = 100, 12 // listH=6, scrollH=5
+	m, _ = key(t, m, "2")       // switch to Targets
+
+	// move the cursor to the bottom of the list
+	for i := 0; i < 100; i++ {
+		m, _ = key(t, m, "j")
+	}
+	v := m.View()
+	if !strings.Contains(v, "s39") {
+		t.Fatalf("last entry should be visible; view:\n%s", v)
+	}
+	if strings.Contains(v, "s00") {
+		t.Fatalf("first entry should have scrolled out of view; view:\n%s", v)
+	}
+}
+
+func TestSkillsListScrollsToCursor(t *testing.T) {
+	hub, targets, m := tuiEnv(t)
+	// 40 extra skills so the skills list overflows the terminal height.
+	for i := 0; i < 40; i++ {
+		name := fmt.Sprintf("s%02d", i)
+		p := filepath.Join(hub, name)
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p, "SKILL.md"), []byte("---\nname: "+name+"\n---\n# "+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := core.Scan(hub, targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(st, targets)
+	m.width, m.height = 100, 12 // scrollH=5
+
+	// skills sort by name: grilling, s00..s39, tdd → cursor lands on tdd
+	for i := 0; i < 100; i++ {
+		m, _ = key(t, m, "j")
+	}
+	v := m.View()
+	if !strings.Contains(v, "tdd") {
+		t.Fatalf("last skill should be visible; view:\n%s", v)
+	}
+	if strings.Contains(v, "grilling") {
+		t.Fatalf("first skill should have scrolled out of view; view:\n%s", v)
+	}
 }
 
 func TestFilterNarrowsList(t *testing.T) {
@@ -152,6 +215,49 @@ func TestFilterNarrowsList(t *testing.T) {
 	}
 	if !strings.Contains(v, "Red green refactor.") {
 		t.Error("tdd should remain visible")
+	}
+}
+
+func TestFlavorCycleRepaints(t *testing.T) {
+	_, _, m := tuiEnv(t)
+	start := Flavor()
+	defer SetFlavor(start)
+
+	seen := map[string]bool{}
+	for i := 0; i < len(flavorOrder)+1; i++ {
+		name := Flavor()
+		v := m.View()
+		if !strings.Contains(v, "SKILLSEND") {
+			t.Fatalf("%s: view lost the title", name)
+		}
+		// every flavor must render distinct accent colors, otherwise the
+		// cycle silently paints nothing
+		seen[fmt.Sprint(selectedStyle.GetForeground())] = true
+		if i < len(flavorOrder) {
+			if got := CycleFlavor(); got == name {
+				t.Fatalf("cycle did not advance past %q", name)
+			}
+		}
+	}
+	if len(seen) != len(flavorOrder) {
+		t.Errorf("expected %d distinct accent colors across flavors, got %d", len(flavorOrder), len(seen))
+	}
+	if Flavor() != start {
+		t.Errorf("cycle did not wrap back to %q, got %q", start, Flavor())
+	}
+}
+
+func TestSetFlavorIgnoresUnknownNames(t *testing.T) {
+	_, _, m := tuiEnv(t)
+	start := Flavor()
+	defer SetFlavor(start)
+
+	SetFlavor("not-a-flavor")
+	if Flavor() != start {
+		t.Errorf("unknown flavor changed the palette to %q", Flavor())
+	}
+	if v := m.View(); !strings.Contains(v, "SKILLSEND") {
+		t.Error("view broken after rejected flavor")
 	}
 }
 
@@ -200,5 +306,43 @@ func TestConfirmModalGuardsRemoval(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(agents, "elsewhere")); !os.IsNotExist(err) {
 		t.Fatal("foreign link not removed after confirm")
 	}
-	_ = m2
+}
+
+func TestHelpOverlayOpensAndCloses(t *testing.T) {
+	_, _, m := tuiEnv(t)
+	m, _ = key(t, m, "?")
+	if v := m.View(); !strings.Contains(v, "HELP") {
+		t.Fatal("help overlay should render")
+	}
+	// any key closes the overlay without executing that key's action
+	m, _ = key(t, m, "j")
+	if v := m.View(); strings.Contains(v, "HELP") {
+		t.Fatal("help overlay should close on any key")
+	}
+}
+
+func TestTruncateKeepsUTF8(t *testing.T) {
+	got := truncate("资料库技能", 3)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncate split a rune, produced invalid UTF-8: %q", got)
+	}
+	if got != "资料…" {
+		t.Fatalf("truncate = %q, want %q", got, "资料…")
+	}
+	// no truncation needed: unchanged
+	if truncate("grilling", 24) != "grilling" {
+		t.Fatal("short string must pass through untouched")
+	}
+}
+
+func TestHubViewUnknownBehind(t *testing.T) {
+	_, _, m := tuiEnv(t)
+	m.staleness = []core.Staleness{{Name: "grilling", Behind: -1}}
+	v := m.viewHub()
+	if !strings.Contains(v, "behind unknown") {
+		t.Fatalf("unknown behind should render as 'behind unknown', got:\n%s", v)
+	}
+	if strings.Contains(v, "behind 0") {
+		t.Fatalf("unknown behind must not render as 'behind 0':\n%s", v)
+	}
 }
