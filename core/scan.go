@@ -64,9 +64,8 @@ func Scan(hubPath string, targetPaths []string) (*State, error) {
 		skillNames[st.Skills[i].Name] = true
 	}
 
-	for i := range targetPaths {
-		targetPaths[i] = canonicalize(targetPaths[i])
-		tgt, err := scanTarget(hub, targetPaths[i], byAbs, skillNames)
+	for _, tp := range targetPaths {
+		tgt, err := scanTarget(hub, tp, byAbs, skillNames)
 		if err != nil {
 			return nil, err
 		}
@@ -148,10 +147,8 @@ func scanTarget(hub string, targetPath string, byAbs map[string]*Skill, skillNam
 				entry.Kind = KindHubLink
 				entry.HubSkill = sk.Rel
 				sk.Enabled[targetPath] = true
-			} else if insideDir(resolved, hub) {
-				// resolves into the hub but not at a skill directory — treat as foreign
-				entry.Kind = KindForeignLink
 			} else {
+				// resolves to a non-skill location (inside or outside the hub)
 				entry.Kind = KindForeignLink
 			}
 		case fi.IsDir():

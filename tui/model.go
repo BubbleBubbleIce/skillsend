@@ -53,7 +53,6 @@ type Model struct {
 
 	// hub view
 	staleness    []core.Staleness
-	checking     bool
 	commitInput  textinput.Model
 	commitActive bool
 
@@ -117,7 +116,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case opResultMsg:
 		m.busy = false
-		m.checking = false
 		if msg.staleness != nil {
 			m.staleness = msg.staleness
 		}
@@ -351,13 +349,18 @@ func (m Model) updateUpstreamInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				old, _ := manifest.Get(sk.Name)
 				old.Source = newURL
-				if old.Synced == "" {
-					// fresh upstream with no baseline: adopt current content as baseline
-					if sig, serr := core.DirSignature(filepath.Join(hub, filepath.FromSlash(sk.Rel))); serr == nil {
-						old.Tree = sig
-					}
+				// A new URL implies an unknown upstream layout and ref: drop any
+				// stale Path/Ref/Synced and re-baseline on the current content so
+				// the next update either matches the new upstream or is skipped.
+				old.Path = ""
+				old.Ref = ""
+				old.Synced = ""
+				if sig, serr := core.DirSignature(filepath.Join(hub, filepath.FromSlash(sk.Rel))); serr == nil {
+					old.Tree = sig
+				} else {
+					old.Tree = ""
 				}
-				manifest.Set(sk.Name, core.SkillMeta{Source: old.Source, Ref: old.Ref, Path: old.Path, Synced: old.Synced, Tree: old.Tree})
+				manifest.Set(sk.Name, old)
 			}
 			if err := manifest.Save(hub); err != nil {
 				return opResultMsg{err: err}

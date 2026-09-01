@@ -239,7 +239,7 @@ func TestUpdateUpstreamSkillEstablishesBaseline(t *testing.T) {
 }
 
 func TestCheckStaleness(t *testing.T) {
-	upstream, hub, m := fixture(t)
+	_, hub, m := fixture(t)
 	sts := CheckStaleness(hub, m)
 	if len(sts) != 1 {
 		t.Fatalf("want 1 staleness, got %d", len(sts))
@@ -261,5 +261,43 @@ func TestCheckStaleness(t *testing.T) {
 	if !sts[0].Diverged {
 		t.Fatalf("expected diverged flag, got %+v", sts[0])
 	}
-	_ = upstream
+}
+
+func TestPorcelainPaths(t *testing.T) {
+	lines := []string{
+		" M modified.txt",
+		"?? untracked.txt",
+		"R  old -> new",
+		`R  "old name" -> "new name"`,
+		` M "tab\there.txt"`,
+		` M "caf\303\251.txt"`,
+		"",
+	}
+	got := porcelainPaths(lines)
+	want := []string{"modified.txt", "untracked.txt", "new", "new name", "tab\there.txt", "café.txt"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+func TestUnquoteGitPath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"plain.txt", "plain.txt"}, // unquoted passthrough
+		{`"space name.txt"`, "space name.txt"},
+		{`"tab\there"`, "tab\there"},
+		{`"new\nline"`, "new\nline"},
+		{`"quote\"mark"`, `quote"mark`},
+		{`"caf\303\251"`, "café"},
+		{`"back\\slash"`, `back\slash`},
+	}
+	for _, c := range cases {
+		if got := unquoteGitPath(c.in); got != c.want {
+			t.Errorf("unquoteGitPath(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
 }

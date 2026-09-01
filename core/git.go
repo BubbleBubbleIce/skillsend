@@ -55,14 +55,65 @@ func StatusPorcelain(dir string) ([]string, error) {
 }
 
 // porcelainPaths extracts just the path column from porcelain output.
+// Renames/copies are reported as "old -> new"; only the new path is kept.
 func porcelainPaths(lines []string) []string {
 	var paths []string
 	for _, l := range lines {
-		if len(l) > 3 {
-			paths = append(paths, strings.Trim(l[3:], `"`))
+		if len(l) <= 3 {
+			continue
 		}
+		p := l[3:]
+		if i := strings.Index(p, " -> "); i >= 0 {
+			p = p[i+4:]
+		}
+		paths = append(paths, unquoteGitPath(p))
 	}
 	return paths
+}
+
+// unquoteGitPath decodes a path as emitted by `git status --porcelain` with
+// core.quotePath on: double-quoted and C-escaped. Returns the input unchanged
+// when it isn't quoted.
+func unquoteGitPath(p string) string {
+	if len(p) < 2 || p[0] != '"' {
+		return p
+	}
+	p = p[1 : len(p)-1]
+	var b strings.Builder
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		if c != '\\' || i+1 >= len(p) {
+			b.WriteByte(c)
+			continue
+		}
+		i++
+		switch p[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 't':
+			b.WriteByte('\t')
+		case '\\':
+			b.WriteByte('\\')
+		case '"':
+			b.WriteByte('"')
+		default:
+			// octal escape \ooo (up to 3 digits)
+			if p[i] >= '0' && p[i] <= '7' {
+				val, n := 0, 0
+				for i < len(p) && n < 3 && p[i] >= '0' && p[i] <= '7' {
+					val = val*8 + int(p[i]-'0')
+					i++
+					n++
+				}
+				i--
+				b.WriteByte(byte(val))
+			} else {
+				b.WriteByte('\\')
+				b.WriteByte(p[i])
+			}
+		}
+	}
+	return b.String()
 }
 
 // PullFF fast-forwards the hub repo; refuses to merge.

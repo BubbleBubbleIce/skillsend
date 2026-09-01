@@ -40,7 +40,6 @@ func (m Model) updateHub(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "f":
 		hub, targets := m.hub, m.targets
 		m.busy = true
-		m.checking = true
 		return m, func() tea.Msg {
 			manifest, err := core.LoadManifest(hub)
 			if err != nil {
@@ -95,7 +94,11 @@ func (m Model) viewHub() string {
 			case st.UpToDate:
 				line += statusStyle.Render("up to date")
 			default:
-				line += behindStyle.Render(fmt.Sprintf("behind %d commit(s) — press u", maxInt(st.Behind, 0)))
+				if st.Behind < 0 {
+					line += colHeaderStyle.Render("behind unknown — press u")
+				} else {
+					line += behindStyle.Render(fmt.Sprintf("behind %d commit(s) — press u", st.Behind))
+				}
 			}
 			b.WriteString(line + "\n")
 		}

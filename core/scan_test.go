@@ -182,7 +182,7 @@ func TestEnableDisable(t *testing.T) {
 }
 
 func TestRemoveLink(t *testing.T) {
-	hub, targets := env(t)
+	_, targets := env(t)
 	agents, claude := targets[0], targets[1]
 
 	if err := RemoveLink(agents, "somewhere-else"); err != nil {
@@ -194,7 +194,6 @@ func TestRemoveLink(t *testing.T) {
 	if err := RemoveLink(targets[2], "grilling"); !errors.Is(err, ErrNotLink) {
 		t.Fatalf("real dir must be refused, got %v", err)
 	}
-	_ = hub
 }
 
 func TestAdopt(t *testing.T) {
@@ -292,5 +291,34 @@ func TestAdoptFromCollectionRepo(t *testing.T) {
 	}
 	if fi, err := os.Lstat(filepath.Join(coll, "skills", "myskill")); err != nil || fi.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("original location should now be a symlink: %v", err)
+	}
+}
+
+func TestScanPreservesTargetPaths(t *testing.T) {
+	hub, targets := env(t)
+	orig := append([]string(nil), targets...)
+
+	st, err := Scan(hub, targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Scan must not mutate its argument, and Target.Path / Enabled keys must
+	// stay in the caller's path space (the TUI holds those same original paths,
+	// so a symlinked /var → /private/var mismatch would silently break toggles).
+	for i := range targets {
+		if targets[i] != orig[i] {
+			t.Fatalf("Scan mutated its argument: %q -> %q", orig[i], targets[i])
+		}
+		if st.Targets[i].Path != orig[i] {
+			t.Fatalf("Target.Path = %q, want %q (original caller path)", st.Targets[i].Path, orig[i])
+		}
+	}
+
+	byName := map[string]Skill{}
+	for _, sk := range st.Skills {
+		byName[sk.Name] = sk
+	}
+	if !byName["grilling"].Enabled[orig[1]] {
+		t.Fatal("grilling not enabled in claude target when looked up by the original path")
 	}
 }
