@@ -1,17 +1,31 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/BubbleBubbleIce/skillsend/core"
+	"github.com/BubbleBubbleIce/skillsend/tui"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/rookie-oops/skillsend/core"
-	"github.com/rookie-oops/skillsend/tui"
+)
+
+// Stamped in by GoReleaser at release time; "dev" for local builds.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func main() {
+	showVersion := flag.Bool("version", false, "print version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Printf("skillsend %s (commit %s, built %s)\n", version, commit, date)
+		return
+	}
 	hub, err := resolveHub()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "skillsend:", err)

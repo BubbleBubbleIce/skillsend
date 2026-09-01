@@ -1,0 +1,64 @@
+# GoReleaser builds the release artifacts. Run `goreleaser check` after edits;
+# `goreleaser build --snapshot --clean` produces the same binaries locally.
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: skillsend
+    main: .
+    binary: skillsend
+    # static binaries: no CGO, no libc to match on the user's machine
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+    # keeps the embedded build paths/dates stable so rebuilds are byte-identical
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    # skillsend_Darwin_arm64.tar.gz, skillsend_Linux_x86_64.tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - CONTEXT.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    # commit subjects carry an emoji prefix, hence the leading [^a-zA-Z]*
+    exclude:
+      - "^[^a-zA-Z]*docs"
+      - "^[^a-zA-Z]*test"
+      - "^[^a-zA-Z]*chore"
+      - "^[^a-zA-Z]*style"
+
+release:
+  draft: false
+  prerelease: auto

@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Repo status
 
-Git repo initialized on branch `main`, remote `origin` → `rookie-oops/skillsend` (private). Authenticated account: `rookie-oops`.
+Git repo initialized on branch `main`, remote `origin` → `BubbleBubbleIce/skillsend` (public). Authenticated account: `BubbleBubbleIce`.
 
 **Network quirk**: the local proxy (`127.0.0.1:7897`) may have a dead GitHub upstream while direct connection still works. If `gh` or `git` network operations (push/pull/fetch to github.com) fail with TLS `EOF` / `SSL_ERROR_SYSCALL`, retry with proxy vars unset:
 
